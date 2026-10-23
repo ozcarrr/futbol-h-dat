@@ -404,15 +404,21 @@ class _GuessPlayerScreenState extends State<GuessPlayerScreen> {
                   ),
                 ),
                 child: ClipOval(
-                  child: Image.network(
-                    target.imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
-                      color: const Color(0xFF14212D),
-                      child: const Icon(Icons.person,
-                          size: 36, color: Colors.white60),
-                    ),
-                  ),
+                  child: target.imageUrl.isNotEmpty
+                      ? Image.network(
+                          target.imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Container(
+                            color: const Color(0xFF14212D),
+                            child: const Icon(Icons.person,
+                                size: 36, color: Colors.white60),
+                          ),
+                        )
+                      : Container(
+                          color: const Color(0xFF14212D),
+                          child: const Icon(Icons.person,
+                              size: 36, color: Colors.white60),
+                        ),
                 ),
               ),
               const SizedBox(width: 16),

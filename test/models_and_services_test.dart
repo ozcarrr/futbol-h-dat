@@ -66,9 +66,9 @@ void main() {
       apiService.dispose();
     });
 
-    test('getPlayers returns 10 curated players with valid initialTeam and attributes', () async {
+    test('getPlayers returns 49 curated players with valid initialTeam and attributes', () async {
       final players = await apiService.getPlayers();
-      expect(players.length, 10);
+      expect(players.length, 49);
 
       for (final p in players) {
         expect(p.id.isNotEmpty, true);
@@ -78,13 +78,12 @@ void main() {
         expect(p.position.isNotEmpty, true);
         expect(p.initialTeam.isNotEmpty, true);
         expect(p.currentTeam.isNotEmpty, true);
-        expect(p.imageUrl.isNotEmpty, true);
       }
     });
 
-    test('getTeams returns 10 curated clubs with valid crests and attributes', () async {
+    test('getTeams returns 25 curated clubs with valid crests and attributes', () async {
       final teams = await apiService.getTeams();
-      expect(teams.length, 10);
+      expect(teams.length, 25);
 
       for (final t in teams) {
         expect(t.id.isNotEmpty, true);

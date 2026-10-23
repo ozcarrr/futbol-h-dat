@@ -238,16 +238,22 @@ class _GuessTeamScreenState extends State<GuessTeamScreen> {
                                     curve: Curves.easeOutCubic,
                                     child: Padding(
                                       padding: const EdgeInsets.all(12),
-                                      child: Image.network(
-                                        widget.team.logoUrl,
-                                        fit: BoxFit.contain,
-                                        errorBuilder: (_, _, _) =>
-                                            const Icon(
-                                          Icons.shield,
-                                          size: 80,
-                                          color: Color(0xFFFFD54F),
-                                        ),
-                                      ),
+                                      child: widget.team.logoUrl.isNotEmpty
+                                          ? Image.network(
+                                              widget.team.logoUrl,
+                                              fit: BoxFit.contain,
+                                              errorBuilder: (_, _, _) =>
+                                                  const Icon(
+                                                Icons.shield,
+                                                size: 80,
+                                                color: Color(0xFFFFD54F),
+                                              ),
+                                            )
+                                          : const Icon(
+                                              Icons.shield,
+                                              size: 80,
+                                              color: Color(0xFFFFD54F),
+                                            ),
                                     ),
                                   ),
                                 ),
@@ -514,15 +520,21 @@ class _GuessTeamScreenState extends State<GuessTeamScreen> {
                     width: 2,
                   ),
                 ),
-                child: Image.network(
-                  target.logoUrl,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) => const Icon(
-                    Icons.shield,
-                    size: 32,
-                    color: Color(0xFFFFD54F),
-                  ),
-                ),
+                child: target.logoUrl.isNotEmpty
+                    ? Image.network(
+                        target.logoUrl,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) => const Icon(
+                          Icons.shield,
+                          size: 32,
+                          color: Color(0xFFFFD54F),
+                        ),
+                      )
+                    : const Icon(
+                        Icons.shield,
+                        size: 32,
+                        color: Color(0xFFFFD54F),
+                      ),
               ),
               const SizedBox(width: 16),
               Expanded(

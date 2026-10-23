@@ -398,16 +398,23 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     child: isCompleted
                         ? ClipOval(
-                            child: Image.network(
-                              player.imageUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) => Icon(
-                                record.won ? Icons.check : Icons.close,
-                                color: record.won
-                                    ? const Color(0xFF00E676)
-                                    : const Color(0xFFFF5252),
-                              ),
-                            ),
+                            child: player.imageUrl.isNotEmpty
+                                ? Image.network(
+                                    player.imageUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, _, _) => Icon(
+                                      record.won ? Icons.check : Icons.close,
+                                      color: record.won
+                                          ? const Color(0xFF00E676)
+                                          : const Color(0xFFFF5252),
+                                    ),
+                                  )
+                                : Icon(
+                                    record.won ? Icons.check : Icons.close,
+                                    color: record.won
+                                        ? const Color(0xFF00E676)
+                                        : const Color(0xFFFF5252),
+                                  ),
                           )
                         : const Center(
                             child: Icon(
