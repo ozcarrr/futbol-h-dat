@@ -3,6 +3,7 @@ import '../models/team_model.dart';
 import '../services/storage_service.dart';
 import '../widgets/autocomplete_search.dart';
 import '../widgets/clue_tile.dart';
+import '../widgets/app_image.dart';
 
 class GuessTeamScreen extends StatefulWidget {
   final Team team;
@@ -238,22 +239,10 @@ class _GuessTeamScreenState extends State<GuessTeamScreen> {
                                     curve: Curves.easeOutCubic,
                                     child: Padding(
                                       padding: const EdgeInsets.all(12),
-                                      child: widget.team.logoUrl.isNotEmpty
-                                          ? Image.network(
-                                              widget.team.logoUrl,
-                                              fit: BoxFit.contain,
-                                              errorBuilder: (_, _, _) =>
-                                                  const Icon(
-                                                Icons.shield,
-                                                size: 80,
-                                                color: Color(0xFFFFD54F),
-                                              ),
-                                            )
-                                          : const Icon(
-                                              Icons.shield,
-                                              size: 80,
-                                              color: Color(0xFFFFD54F),
-                                            ),
+                                      child: TeamBadge(
+                                        team: widget.team,
+                                        fit: BoxFit.contain,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -520,21 +509,10 @@ class _GuessTeamScreenState extends State<GuessTeamScreen> {
                     width: 2,
                   ),
                 ),
-                child: target.logoUrl.isNotEmpty
-                    ? Image.network(
-                        target.logoUrl,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, _, _) => const Icon(
-                          Icons.shield,
-                          size: 32,
-                          color: Color(0xFFFFD54F),
-                        ),
-                      )
-                    : const Icon(
-                        Icons.shield,
-                        size: 32,
-                        color: Color(0xFFFFD54F),
-                      ),
+                child: TeamBadge(
+                  team: target,
+                  fit: BoxFit.contain,
+                ),
               ),
               const SizedBox(width: 16),
               Expanded(

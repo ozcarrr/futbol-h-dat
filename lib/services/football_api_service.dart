@@ -679,7 +679,7 @@ class FootballApiService {
       country: 'Italia',
       league: 'Serie A',
       logoUrl:
-          'https://r2.thesportsdb.com/images/media/team/badge/z36f0n1617094038.png',
+          'https://r2.thesportsdb.com/images/media/team/badge/ryhu6d1617113103.png',
     ),
     Team(
       id: 't20',
@@ -687,7 +687,7 @@ class FootballApiService {
       country: 'Alemania',
       league: 'Bundesliga',
       logoUrl:
-          'https://r2.thesportsdb.com/images/media/team/badge/6df2k51716960447.png',
+          'https://r2.thesportsdb.com/images/media/team/badge/3x9k851726760113.png',
     ),
     Team(
       id: 't21',
@@ -695,7 +695,7 @@ class FootballApiService {
       country: 'Alemania',
       league: 'Bundesliga',
       logoUrl:
-          'https://r2.thesportsdb.com/images/media/team/badge/2836261716960481.png',
+          'https://r2.thesportsdb.com/images/media/team/badge/tqo8ge1716960353.png',
     ),
     Team(
       id: 't22',
@@ -719,7 +719,7 @@ class FootballApiService {
       country: 'Chile',
       league: 'Campeonato Ascenso / Primera',
       logoUrl:
-          'https://r2.thesportsdb.com/images/media/team/badge/15m53x1610649871.png',
+          'https://r2.thesportsdb.com/images/media/team/badge/y971we1756782437.png',
     ),
     Team(
       id: 't25',

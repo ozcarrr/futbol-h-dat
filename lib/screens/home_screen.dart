@@ -6,6 +6,7 @@ import '../services/football_api_service.dart';
 import '../services/storage_service.dart';
 import 'guess_player_screen.dart';
 import 'guess_team_screen.dart';
+import '../widgets/app_image.dart';
 
 class HomeScreen extends StatefulWidget {
   final FootballApiService? apiService;
@@ -398,23 +399,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     child: isCompleted
                         ? ClipOval(
-                            child: player.imageUrl.isNotEmpty
-                                ? Image.network(
-                                    player.imageUrl,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, _, _) => Icon(
-                                      record.won ? Icons.check : Icons.close,
-                                      color: record.won
-                                          ? const Color(0xFF00E676)
-                                          : const Color(0xFFFF5252),
-                                    ),
-                                  )
-                                : Icon(
-                                    record.won ? Icons.check : Icons.close,
-                                    color: record.won
-                                        ? const Color(0xFF00E676)
-                                        : const Color(0xFFFF5252),
-                                  ),
+                            child: PlayerPhoto(player: player),
                           )
                         : const Center(
                             child: Icon(
@@ -524,15 +509,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     child: isCompleted
-                        ? Image.network(
-                            team.logoUrl,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, _, _) => Icon(
-                              record.won ? Icons.check : Icons.close,
-                              color: record.won
-                                  ? const Color(0xFFFFD54F)
-                                  : const Color(0xFFFF5252),
-                            ),
+                        ? Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: TeamBadge(team: team, fit: BoxFit.contain),
                           )
                         : const Center(
                             child: Icon(

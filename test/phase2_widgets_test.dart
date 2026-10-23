@@ -5,6 +5,7 @@ import 'package:futbole/models/player_model.dart';
 import 'package:futbole/models/team_model.dart';
 import 'package:futbole/screens/home_screen.dart';
 import 'package:futbole/widgets/autocomplete_search.dart';
+import 'package:futbole/widgets/app_image.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -175,6 +176,51 @@ void main() {
 
       // Verify challenges list for players
       expect(find.text('Desafío Jugador #1'), findsOneWidget);
+    });
+  });
+
+  group('Safe Image Widgets', () {
+    testWidgets('TeamBadge renders bundled asset for curated team', (tester) async {
+      const team = Team(
+        id: 't1',
+        name: 'Colo-Colo',
+        country: 'Chile',
+        league: 'Primera División de Chile',
+        logoUrl: 'https://r2.thesportsdb.com/images/media/team/badge/s41be31578347962.png',
+      );
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: TeamBadge(team: team),
+          ),
+        ),
+      );
+
+      expect(find.byType(Image), findsOneWidget);
+    });
+
+    testWidgets('PlayerPhoto renders bundled asset for p1', (tester) async {
+      const player = Player(
+        id: 'p1',
+        name: 'Alexis Sánchez',
+        nationality: 'Chile',
+        age: 35,
+        position: 'Forward',
+        initialTeam: 'Cobreloa',
+        currentTeam: 'Udinese',
+        imageUrl: 'https://r2.thesportsdb.com/images/media/player/thumb/m05tjc1718343405.jpg',
+      );
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: PlayerPhoto(player: player),
+          ),
+        ),
+      );
+
+      expect(find.byType(Image), findsOneWidget);
     });
   });
 }

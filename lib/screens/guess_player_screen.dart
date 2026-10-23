@@ -3,6 +3,7 @@ import '../models/player_model.dart';
 import '../services/storage_service.dart';
 import '../widgets/autocomplete_search.dart';
 import '../widgets/clue_tile.dart';
+import '../widgets/app_image.dart';
 
 class GuessPlayerScreen extends StatefulWidget {
   final Player player;
@@ -404,21 +405,7 @@ class _GuessPlayerScreenState extends State<GuessPlayerScreen> {
                   ),
                 ),
                 child: ClipOval(
-                  child: target.imageUrl.isNotEmpty
-                      ? Image.network(
-                          target.imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => Container(
-                            color: const Color(0xFF14212D),
-                            child: const Icon(Icons.person,
-                                size: 36, color: Colors.white60),
-                          ),
-                        )
-                      : Container(
-                          color: const Color(0xFF14212D),
-                          child: const Icon(Icons.person,
-                              size: 36, color: Colors.white60),
-                        ),
+                  child: PlayerPhoto(player: target),
                 ),
               ),
               const SizedBox(width: 16),
