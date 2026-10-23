@@ -676,14 +676,27 @@ class _ApiInspectorSheet extends StatefulWidget {
 
 class _ApiInspectorSheetState extends State<_ApiInspectorSheet> {
   final TextEditingController _queryController = TextEditingController();
+  late final TextEditingController _apiKeyController;
   bool _isSearching = false;
   Map<String, dynamic>? _lastResult;
   String? _errorMessage;
   String _targetType = 'team'; // 'team' or 'player'
 
+  @override
+  void initState() {
+    super.initState();
+    _apiKeyController =
+        TextEditingController(text: widget.apiService.apiKey);
+  }
+
   Future<void> _executeSearch(String query) async {
     final text = query.trim();
     if (text.isEmpty) return;
+
+    // Sync any user-modified API key
+    if (_apiKeyController.text.trim().isNotEmpty) {
+      widget.apiService.apiKey = _apiKeyController.text.trim();
+    }
 
     setState(() {
       _isSearching = true;
@@ -723,6 +736,7 @@ class _ApiInspectorSheetState extends State<_ApiInspectorSheet> {
   @override
   void dispose() {
     _queryController.dispose();
+    _apiKeyController.dispose();
     super.dispose();
   }
 
@@ -767,6 +781,54 @@ class _ApiInspectorSheetState extends State<_ApiInspectorSheet> {
                 style: TextStyle(color: Colors.white70, fontSize: 13),
               ),
               const SizedBox(height: 16),
+
+              // API Key Configuration row
+              Row(
+                children: [
+                  const Text('API Key:',
+                      style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold)),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 140,
+                    height: 36,
+                    child: TextField(
+                      controller: _apiKeyController,
+                      style: const TextStyle(
+                          color: Color(0xFF00E676),
+                          fontSize: 12,
+                          fontFamily: 'monospace'),
+                      decoration: InputDecoration(
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                        hintText: '123 o tu API Key',
+                        hintStyle: const TextStyle(
+                            color: Colors.white30, fontSize: 11),
+                        filled: true,
+                        fillColor: const Color(0xFF14212D),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              const BorderSide(color: Color(0xFF223545)),
+                        ),
+                      ),
+                      onChanged: (val) {
+                        widget.apiService.apiKey = val;
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Usa "123" (prueba) o tu clave gratuita de TheSportsDB',
+                      style: TextStyle(color: Colors.white38, fontSize: 10),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
 
               // Selector Team / Player
               Row(
@@ -906,6 +968,35 @@ class _ApiInspectorSheetState extends State<_ApiInspectorSheet> {
                           ),
                         ],
                       ),
+                      if ((_lastResult!['strBadge'] ??
+                              _lastResult!['strThumb'] ??
+                              _lastResult!['strLogo']) !=
+                          null) ...[
+                        const SizedBox(height: 10),
+                        Center(
+                          child: Container(
+                            height: 90,
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF14212D),
+                              borderRadius: BorderRadius.circular(10),
+                              border:
+                                  Border.all(color: const Color(0xFF223545)),
+                            ),
+                            child: Image.network(
+                              (_lastResult!['strBadge'] ??
+                                      _lastResult!['strThumb'] ??
+                                      _lastResult!['strLogo'])
+                                  .toString(),
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, _, _) => const Icon(
+                                Icons.image_not_supported,
+                                color: Colors.white38,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       Text(
                         const JsonEncoder.withIndent('  ')

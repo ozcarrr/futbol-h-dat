@@ -5,14 +5,24 @@ import '../models/team_model.dart';
 
 class FootballApiService {
   final http.Client _client;
-  static const String _primaryBaseUrl =
-      'https://www.thesportsdb.com/api/v1/json/3';
-  static const String _fallbackBaseUrl =
-      'https://www.thesportsdb.com/api/v1/json/123';
+  String _apiKey;
 
-  FootballApiService({http.Client? client}) : _client = client ?? http.Client();
+  FootballApiService({
+    http.Client? client,
+    String? apiKey,
+  })  : _client = client ?? http.Client(),
+        _apiKey = apiKey ??
+            const String.fromEnvironment('THESPORTSDB_KEY', defaultValue: '123');
+
+  String get apiKey => _apiKey;
+  set apiKey(String key) {
+    if (key.trim().isNotEmpty) {
+      _apiKey = key.trim();
+    }
+  }
 
   /// Curated fallback and enrichment dataset of 10 iconic football players
+  /// with official high-resolution images hosted on TheSportsDB CDN
   static const List<Player> _curatedPlayers = [
     Player(
       id: 'p1',
@@ -23,7 +33,7 @@ class FootballApiService {
       initialTeam: 'Cobreloa',
       currentTeam: 'Udinese',
       imageUrl:
-          'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Alexis_S%C3%A1nchez_2018.jpg/500px-Alexis_S%C3%A1nchez_2018.jpg',
+          'https://r2.thesportsdb.com/images/media/player/thumb/m05tjc1718343405.jpg',
     ),
     Player(
       id: 'p2',
@@ -34,7 +44,7 @@ class FootballApiService {
       initialTeam: "Newell's Old Boys",
       currentTeam: 'Inter Miami',
       imageUrl:
-          'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Lionel_Messi_20180626.jpg/500px-Lionel_Messi_20180626.jpg',
+          'https://r2.thesportsdb.com/images/media/player/thumb/kpfsvp1725295651.jpg',
     ),
     Player(
       id: 'p3',
@@ -45,7 +55,7 @@ class FootballApiService {
       initialTeam: 'Sporting CP',
       currentTeam: 'Al-Nassr',
       imageUrl:
-          'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Cristiano_Ronaldo_playing_for_Al_Nassr_FC_against_Persepolis%2C_September_2023_%28cropped%29.jpg/500px-Cristiano_Ronaldo_playing_for_Al_Nassr_FC_against_Persepolis%2C_September_2023_%28cropped%29.jpg',
+          'https://r2.thesportsdb.com/images/media/player/thumb/bkre241600892282.jpg',
     ),
     Player(
       id: 'p4',
@@ -56,7 +66,7 @@ class FootballApiService {
       initialTeam: 'Colo-Colo',
       currentTeam: 'Colo-Colo',
       imageUrl:
-          'https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Arturo_Vidal_2018.jpg/500px-Arturo_Vidal_2018.jpg',
+          'https://r2.thesportsdb.com/images/media/player/thumb/k9hqf21534884616.jpg',
     ),
     Player(
       id: 'p5',
@@ -67,7 +77,7 @@ class FootballApiService {
       initialTeam: 'Everton',
       currentTeam: 'Retired',
       imageUrl:
-          'https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/Wayne_Rooney_2020.jpg/500px-Wayne_Rooney_2020.jpg',
+          'https://r2.thesportsdb.com/images/media/player/thumb/w561fs1732109007.jpg',
     ),
     Player(
       id: 'p6',
@@ -78,7 +88,7 @@ class FootballApiService {
       initialTeam: 'AS Monaco',
       currentTeam: 'Real Madrid',
       imageUrl:
-          'https://upload.wikimedia.org/wikipedia/commons/thumb/5/57/2019-07-17_SG_Dynamo_Dresden_vs._Paris_Saint-Germain_by_Sandro_Halank%E2%80%93129_%28cropped%29.jpg/500px-2019-07-17_SG_Dynamo_Dresden_vs._Paris_Saint-Germain_by_Sandro_Halank%E2%80%93129_%28cropped%29.jpg',
+          'https://r2.thesportsdb.com/images/media/player/thumb/v08cj31778816426.jpg',
     ),
     Player(
       id: 'p7',
@@ -89,7 +99,7 @@ class FootballApiService {
       initialTeam: 'Bryne FK',
       currentTeam: 'Manchester City',
       imageUrl:
-          'https://upload.wikimedia.org/wikipedia/commons/thumb/0/07/Erling_Haaland_2023_%28cropped-v2%29.jpg/500px-Erling_Haaland_2023_%28cropped-v2%29.jpg',
+          'https://r2.thesportsdb.com/images/media/player/thumb/bb1agj1727415216.jpg',
     ),
     Player(
       id: 'p8',
@@ -100,7 +110,7 @@ class FootballApiService {
       initialTeam: 'Dinamo Zagreb',
       currentTeam: 'Real Madrid',
       imageUrl:
-          'https://upload.wikimedia.org/wikipedia/commons/thumb/b/bf/Luka_Modric_Interview_2021_%28cropped%29.jpg/500px-Luka_Modric_Interview_2021_%28cropped%29.jpg',
+          'https://r2.thesportsdb.com/images/media/player/thumb/6j40781707595475.jpg',
     ),
     Player(
       id: 'p9',
@@ -111,7 +121,7 @@ class FootballApiService {
       initialTeam: 'Hansa Rostock',
       currentTeam: 'Retired',
       imageUrl:
-          'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ae/Toni_Kroos_2022.jpg/500px-Toni_Kroos_2022.jpg',
+          'https://r2.thesportsdb.com/images/media/player/thumb/y0mq231615718372.jpg',
     ),
     Player(
       id: 'p10',
@@ -122,11 +132,12 @@ class FootballApiService {
       initialTeam: 'Grêmio',
       currentTeam: 'Retired',
       imageUrl:
-          'https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/Ronaldinho_Ga%C3%BAcho_2019.jpg/500px-Ronaldinho_Ga%C3%BAcho_2019.jpg',
+          'https://r2.thesportsdb.com/images/media/player/thumb/2dyq4u1533490608.jpg',
     ),
   ];
 
   /// Curated fallback and enrichment dataset of 10 iconic football clubs
+  /// with official high-resolution crests/badges hosted on TheSportsDB CDN
   static const List<Team> _curatedTeams = [
     Team(
       id: 't1',
@@ -134,7 +145,7 @@ class FootballApiService {
       country: 'Chile',
       league: 'Primera División de Chile',
       logoUrl:
-          'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Colo-Colo_logo.svg/500px-Colo-Colo_logo.svg.png',
+          'https://r2.thesportsdb.com/images/media/team/badge/s41be31578347962.png',
     ),
     Team(
       id: 't2',
@@ -142,7 +153,7 @@ class FootballApiService {
       country: 'Chile',
       league: 'Primera División de Chile',
       logoUrl:
-          'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Club_Universidad_de_Chile_logo.svg/500px-Club_Universidad_de_Chile_logo.svg.png',
+          'https://r2.thesportsdb.com/images/media/team/badge/po0o3c1578347873.png',
     ),
     Team(
       id: 't3',
@@ -150,7 +161,7 @@ class FootballApiService {
       country: 'England',
       league: 'Premier League',
       logoUrl:
-          'https://upload.wikimedia.org/wikipedia/en/thumb/7/7a/Manchester_United_FC_crest.svg/500px-Manchester_United_FC_crest.svg.png',
+          'https://r2.thesportsdb.com/images/media/team/badge/xzqdr11517660252.png',
     ),
     Team(
       id: 't4',
@@ -158,7 +169,7 @@ class FootballApiService {
       country: 'Spain',
       league: 'La Liga',
       logoUrl:
-          'https://upload.wikimedia.org/wikipedia/en/thumb/5/56/Real_Madrid_CF.svg/500px-Real_Madrid_CF.svg.png',
+          'https://r2.thesportsdb.com/images/media/team/badge/vwvwrw1473502969.png',
     ),
     Team(
       id: 't5',
@@ -166,7 +177,7 @@ class FootballApiService {
       country: 'Spain',
       league: 'La Liga',
       logoUrl:
-          'https://upload.wikimedia.org/wikipedia/en/thumb/4/47/FC_Barcelona_%28crest%29.svg/500px-FC_Barcelona_%28crest%29.svg.png',
+          'https://r2.thesportsdb.com/images/media/team/badge/wq9sir1639406443.png',
     ),
     Team(
       id: 't6',
@@ -174,7 +185,7 @@ class FootballApiService {
       country: 'Germany',
       league: 'Bundesliga',
       logoUrl:
-          'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/FC_Bayern_M%C3%BCnchen_logo_%282017%29.svg/500px-FC_Bayern_M%C3%BCnchen_logo_%282017%29.svg.png',
+          'https://r2.thesportsdb.com/images/media/team/badge/01ogkh1716960412.png',
     ),
     Team(
       id: 't7',
@@ -182,7 +193,7 @@ class FootballApiService {
       country: 'Italy',
       league: 'Serie A',
       logoUrl:
-          'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/Logo_of_AC_Milan.svg/500px-Logo_of_AC_Milan.svg.png',
+          'https://r2.thesportsdb.com/images/media/team/badge/wvspur1448806617.png',
     ),
     Team(
       id: 't8',
@@ -190,7 +201,7 @@ class FootballApiService {
       country: 'England',
       league: 'Premier League',
       logoUrl:
-          'https://upload.wikimedia.org/wikipedia/en/thumb/5/53/Arsenal_FC.svg/500px-Arsenal_FC.svg.png',
+          'https://r2.thesportsdb.com/images/media/team/badge/uyhbfe1612467038.png',
     ),
     Team(
       id: 't9',
@@ -198,7 +209,7 @@ class FootballApiService {
       country: 'Argentina',
       league: 'Liga Profesional de Fútbol',
       logoUrl:
-          'https://upload.wikimedia.org/wikipedia/commons/thumb/4/41/CABJ-escudo-2021.svg/500px-CABJ-escudo-2021.svg.png',
+          'https://r2.thesportsdb.com/images/media/team/badge/bm7krb1775741582.png',
     ),
     Team(
       id: 't10',
@@ -206,7 +217,7 @@ class FootballApiService {
       country: 'Italy',
       league: 'Serie A',
       logoUrl:
-          'https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Juventus_FC_2017_logo.svg/500px-Juventus_FC_2017_logo.svg.png',
+          'https://r2.thesportsdb.com/images/media/team/badge/uxf0gr1742983727.png',
     ),
   ];
 
@@ -227,8 +238,8 @@ class FootballApiService {
     if (query.isEmpty) return null;
 
     final endpoints = [
-      '$_primaryBaseUrl/searchteams.php?t=${Uri.encodeComponent(query)}',
-      '$_fallbackBaseUrl/searchteams.php?t=${Uri.encodeComponent(query)}',
+      'https://www.thesportsdb.com/api/v1/json/$_apiKey/searchteams.php?t=${Uri.encodeComponent(query)}',
+      'https://www.thesportsdb.com/api/v1/json/123/searchteams.php?t=${Uri.encodeComponent(query)}',
     ];
 
     for (final url in endpoints) {
@@ -240,16 +251,19 @@ class FootballApiService {
               data['teams'] != null &&
               data['teams'] is List &&
               (data['teams'] as List).isNotEmpty) {
-            return (data['teams'] as List).first as Map<String, dynamic>;
+            final teamData = (data['teams'] as List).first as Map<String, dynamic>;
+            return {
+              ...teamData,
+              'source': 'TheSportsDB Live REST API',
+            };
           }
         }
       } catch (_) {
-        // Network error, CORS restriction on web, or decoding failure.
-        // Continue to fallback endpoint or curated dataset.
+        // Network error, CORS restriction on web, or rate limit 429.
       }
     }
 
-    // Curated fallback search
+    // Curated fallback search with official TheSportsDB CDN badges
     final normalized = query.toLowerCase();
     for (final team in _curatedTeams) {
       if (team.name.toLowerCase().contains(normalized) ||
@@ -260,7 +274,7 @@ class FootballApiService {
           'strCountry': team.country,
           'strLeague': team.league,
           'strBadge': team.logoUrl,
-          'source': 'curated_fallback',
+          'source': 'TheSportsDB Curated Cache',
         };
       }
     }
@@ -274,8 +288,8 @@ class FootballApiService {
     if (query.isEmpty) return null;
 
     final endpoints = [
-      '$_primaryBaseUrl/searchplayers.php?p=${Uri.encodeComponent(query)}',
-      '$_fallbackBaseUrl/searchplayers.php?p=${Uri.encodeComponent(query)}',
+      'https://www.thesportsdb.com/api/v1/json/$_apiKey/searchplayers.php?p=${Uri.encodeComponent(query)}',
+      'https://www.thesportsdb.com/api/v1/json/123/searchplayers.php?p=${Uri.encodeComponent(query)}',
     ];
 
     for (final url in endpoints) {
@@ -287,7 +301,11 @@ class FootballApiService {
               data['player'] != null &&
               data['player'] is List &&
               (data['player'] as List).isNotEmpty) {
-            return (data['player'] as List).first as Map<String, dynamic>;
+            final playerData = (data['player'] as List).first as Map<String, dynamic>;
+            return {
+              ...playerData,
+              'source': 'TheSportsDB Live REST API',
+            };
           }
         }
       } catch (_) {
@@ -308,7 +326,7 @@ class FootballApiService {
           'initialTeam': player.initialTeam,
           'strThumb': player.imageUrl,
           'age': player.age,
-          'source': 'curated_fallback',
+          'source': 'TheSportsDB Curated Cache',
         };
       }
     }
