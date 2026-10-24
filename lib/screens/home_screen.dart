@@ -1,11 +1,14 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/custom_challenge_model.dart';
 import '../models/player_model.dart';
 import '../models/team_model.dart';
 import '../providers/game_provider.dart';
 import '../services/football_api_service.dart';
 import '../services/storage_service.dart';
+import 'auth_screen.dart';
+import 'custom_challenge_form_dialog.dart';
 import 'guess_player_screen.dart';
 import 'guess_team_screen.dart';
 import '../widgets/app_image.dart';
@@ -168,6 +171,65 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _confirmDeleteChallenge(CustomChallenge challenge) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF14212D),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFF223545)),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_outline, color: Color(0xFFFF5252)),
+            SizedBox(width: 8),
+            Text('¿Eliminar Desafío?',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'Se eliminará "${challenge.title}" de tu cuenta en Supabase.',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child:
+                const Text('Cancelar', style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF5252),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final provider = _getGameProvider();
+      if (provider != null) {
+        await provider.deleteCustomChallenge(challenge.id);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Color(0xFF102820),
+            content: Text(
+              '🗑️ Desafío eliminado con éxito.',
+              style: TextStyle(color: Color(0xFF00E676)),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   void _showApiInspector() {
     showModalBottomSheet(
       context: context,
@@ -191,9 +253,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final currentStats = provider?.statistics ?? _fallbackStats;
     final currentRecords = provider?.recordsMap ?? _fallbackRecordsMap;
+    final isAuthenticated = provider?.isAuthenticated ?? false;
+    final userEmail = provider?.currentUserEmail;
 
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: Row(
@@ -220,6 +284,70 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           actions: [
+            // User Session Profile / Auth button
+            if (isAuthenticated) ...[
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF102820),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: const Color(0xFF00E676).withAlpha(120)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.verified_user,
+                        size: 15, color: Color(0xFF00E676)),
+                    const SizedBox(width: 5),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 120),
+                      child: Text(
+                        userEmail ?? 'Usuario',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.logout,
+                    color: Color(0xFFFF8A80), size: 20),
+                tooltip: 'Cerrar Sesión',
+                onPressed: () async {
+                  await provider?.logout();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Sesión cerrada correctamente.')),
+                    );
+                  }
+                },
+              ),
+            ] else ...[
+              TextButton.icon(
+                key: const Key('home_login_button'),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF00E676),
+                ),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AuthScreen()),
+                  );
+                },
+                icon: const Icon(Icons.account_circle, size: 20),
+                label: const Text(
+                  'Entrar',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
             IconButton(
               icon: const Icon(Icons.refresh),
               tooltip: 'Recargar datos',
@@ -245,6 +373,10 @@ class _HomeScreenState extends State<HomeScreen> {
               Tab(
                 icon: Icon(Icons.shield),
                 text: 'Adivinar Equipo',
+              ),
+              Tab(
+                icon: Icon(Icons.playlist_add_check),
+                text: 'Mis Desafíos (CRUD)',
               ),
             ],
           ),
@@ -318,6 +450,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           _buildPlayersList(currentRecords),
                           _buildTeamsList(currentRecords),
+                          _buildCustomChallengesList(provider),
                         ],
                       ),
                     ),
@@ -660,6 +793,210 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildCustomChallengesList(GameProvider? provider) {
+    final challenges = provider?.customChallenges ?? [];
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          // Header action bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF14212D),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF223545)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.cloud_sync,
+                    color: Color(0xFF81D4FA), size: 20),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Desafíos Supabase con RLS',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                ElevatedButton.icon(
+                  key: const Key('create_challenge_button'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00E676),
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) => const CustomChallengeFormDialog(),
+                    );
+                  },
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text(
+                    'Crear Desafío',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Challenge list or empty state
+          Expanded(
+            child: challenges.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.playlist_add,
+                              size: 56, color: Colors.white24),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Aún no hay desafíos personalizados.',
+                            style:
+                                TextStyle(color: Colors.white70, fontSize: 16),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Crea desafíos con pistas para tu grupo. Se sincronizan en Supabase con RLS.',
+                            textAlign: TextAlign.center,
+                            style:
+                                TextStyle(color: Colors.white38, fontSize: 12),
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00E676),
+                              foregroundColor: Colors.black,
+                            ),
+                            onPressed: () {
+                              showDialog(
+                                context: context,
+                                builder: (_) =>
+                                    const CustomChallengeFormDialog(),
+                              );
+                            },
+                            icon: const Icon(Icons.add),
+                            label: const Text('Crear Primer Desafío'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: challenges.length,
+                    itemBuilder: (context, index) {
+                      final item = challenges[index];
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          const Color(0xFF00E676).withAlpha(25),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                          color: const Color(0xFF00E676)
+                                              .withAlpha(100)),
+                                    ),
+                                    child: Text(
+                                      item.category.toUpperCase(),
+                                      style: const TextStyle(
+                                        color: Color(0xFF00E676),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      item.title,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  // Action: View/Play
+                                  IconButton(
+                                    icon: const Icon(
+                                        Icons.visibility_outlined,
+                                        color: Color(0xFF81D4FA),
+                                        size: 20),
+                                    tooltip: 'Ver / Jugar',
+                                    onPressed: () {
+                                      showDialog(
+                                        context: context,
+                                        builder: (_) =>
+                                            CustomChallengeDetailDialog(
+                                                challenge: item),
+                                      );
+                                    },
+                                  ),
+                                  // Action: Edit
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_outlined,
+                                        color: Color(0xFFFFD54F), size: 20),
+                                    tooltip: 'Editar',
+                                    onPressed: () {
+                                      showDialog(
+                                        context: context,
+                                        builder: (_) =>
+                                            CustomChallengeFormDialog(
+                                                challenge: item),
+                                      );
+                                    },
+                                  ),
+                                  // Action: Delete
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline,
+                                        color: Color(0xFFFF5252), size: 20),
+                                    tooltip: 'Borrar',
+                                    onPressed: () =>
+                                        _confirmDeleteChallenge(item),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Pistas: 1) ${item.clue1} • 2) ${item.clue2} • 3) ${item.clue3}',
+                                style: const TextStyle(
+                                    color: Colors.white70, fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
