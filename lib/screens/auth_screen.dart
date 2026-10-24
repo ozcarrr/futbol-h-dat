@@ -61,7 +61,7 @@ class _AuthScreenState extends State<AuthScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString().replaceFirst('Exception: ', '');
+          _errorMessage = _parseAuthError(e);
         });
       }
     } finally {
@@ -69,6 +69,34 @@ class _AuthScreenState extends State<AuthScreen> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  String _parseAuthError(dynamic error) {
+    final str = error.toString().toLowerCase();
+    if (str.contains('invalid login credentials') ||
+        str.contains('invalid_credentials')) {
+      return 'Credenciales inválidas o la cuenta no existe. Si es una cuenta nueva, cambia abajo a "Crear Cuenta". Si ya la creaste antes, desactiva "Confirm email" en Supabase.';
+    }
+    if (str.contains('email rate limit') ||
+        str.contains('over_email_send_rate_limit')) {
+      return 'Límite de correos de Supabase alcanzado. En tu panel de Supabase ve a Authentication -> Providers -> Email y desactiva la casilla "Confirm email".';
+    }
+    if (str.contains('email not confirmed') ||
+        str.contains('email_not_confirmed')) {
+      return 'El correo no ha sido confirmado. En tu panel de Supabase (Authentication -> Providers -> Email) desactiva la casilla "Confirm email" para entrar directamente.';
+    }
+    if (str.contains('user already registered') ||
+        str.contains('user_already_exists')) {
+      return 'Este correo ya está registrado en Supabase. Cambia abajo a "Iniciar Sesión" e ingresa tu contraseña.';
+    }
+    if (str.contains('email address') && str.contains('invalid')) {
+      return 'Dirección de correo rechazada por el servidor de Supabase. Usa un formato estándar como usuario@gmail.com.';
+    }
+    return error
+        .toString()
+        .replaceFirst('Exception: ', '')
+        .replaceFirst('AuthApiException: ', '')
+        .replaceFirst('AuthUnknownException: ', '');
   }
 
   Future<void> _loginDemoMode() async {
@@ -93,7 +121,7 @@ class _AuthScreenState extends State<AuthScreen> {
         Navigator.of(context).pop(true);
       }
     } catch (e) {
-      if (mounted) setState(() => _errorMessage = e.toString());
+      if (mounted) setState(() => _errorMessage = _parseAuthError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
