@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/player_model.dart';
+import '../providers/game_provider.dart';
 import '../services/storage_service.dart';
 import '../widgets/autocomplete_search.dart';
 import '../widgets/clue_tile.dart';
@@ -40,8 +42,18 @@ class _GuessPlayerScreenState extends State<GuessPlayerScreen> {
     _checkInitialState();
   }
 
+  GameProvider? _getGameProvider() {
+    try {
+      return Provider.of<GameProvider>(context, listen: false);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _checkInitialState() async {
-    final record = await _storageService.getChallengeResult(widget.player.id);
+    final provider = _getGameProvider();
+    final record = provider?.getRecord(widget.player.id) ??
+        await _storageService.getChallengeResult(widget.player.id);
     if (mounted) {
       setState(() {
         if (record != null) {
@@ -76,7 +88,15 @@ class _GuessPlayerScreenState extends State<GuessPlayerScreen> {
     });
 
     if (isCorrect || isMaxReached) {
-      if (!_isPracticeMode) {
+      final provider = _getGameProvider();
+      if (provider != null) {
+        await provider.recordChallengeAttempt(
+          challengeId: widget.player.id,
+          type: 'player',
+          won: isCorrect,
+          attemptsUsed: newAttempts,
+        );
+      } else if (!_isPracticeMode) {
         await _storageService.saveChallengeResult(
           challengeId: widget.player.id,
           type: 'player',
@@ -101,13 +121,23 @@ class _GuessPlayerScreenState extends State<GuessPlayerScreen> {
       }
     });
 
-    if (isMaxReached && !_isPracticeMode) {
-      await _storageService.saveChallengeResult(
-        challengeId: widget.player.id,
-        type: 'player',
-        won: false,
-        attemptsUsed: newAttempts,
-      );
+    if (isMaxReached) {
+      final provider = _getGameProvider();
+      if (provider != null) {
+        await provider.recordChallengeAttempt(
+          challengeId: widget.player.id,
+          type: 'player',
+          won: false,
+          attemptsUsed: newAttempts,
+        );
+      } else if (!_isPracticeMode) {
+        await _storageService.saveChallengeResult(
+          challengeId: widget.player.id,
+          type: 'player',
+          won: false,
+          attemptsUsed: newAttempts,
+        );
+      }
     }
   }
 
@@ -178,6 +208,53 @@ class _GuessPlayerScreenState extends State<GuessPlayerScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      // Challenge Header Hero Avatar
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Hero(
+                            tag: 'player_hero_${widget.player.id}',
+                            child: Material(
+                              color: Colors.transparent,
+                              child: Container(
+                                width: 68,
+                                height: 68,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: const Color(0xFF14212D),
+                                  border: Border.all(
+                                    color: _isGameOver
+                                        ? (_isWon
+                                            ? const Color(0xFF00E676)
+                                            : const Color(0xFFFF5252))
+                                        : const Color(0xFF00E676).withAlpha(140),
+                                    width: 2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withAlpha(120),
+                                      blurRadius: 14,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipOval(
+                                  child: _isGameOver
+                                      ? PlayerPhoto(player: widget.player)
+                                      : const Center(
+                                          child: Icon(
+                                            Icons.question_mark_rounded,
+                                            color: Color(0xFF00E676),
+                                            size: 32,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+
                       // Attempt progress indicators
                       _buildAttemptsBar(),
                       const SizedBox(height: 16),

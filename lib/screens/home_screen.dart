@@ -1,12 +1,24 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/player_model.dart';
 import '../models/team_model.dart';
+import '../providers/game_provider.dart';
 import '../services/football_api_service.dart';
 import '../services/storage_service.dart';
 import 'guess_player_screen.dart';
 import 'guess_team_screen.dart';
 import '../widgets/app_image.dart';
+
+class FootballData {
+  final List<Player> players;
+  final List<Team> teams;
+
+  const FootballData({
+    required this.players,
+    required this.teams,
+  });
+}
 
 class HomeScreen extends StatefulWidget {
   final FootballApiService? apiService;
@@ -25,52 +37,62 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late final FootballApiService _apiService;
   late final StorageService _storageService;
+  late Future<FootballData> _footballDataFuture;
 
   List<Player> _players = [];
   List<Team> _teams = [];
-  Map<String, ChallengeRecord> _recordsMap = {};
-  Map<String, dynamic> _stats = {
+  Map<String, ChallengeRecord> _fallbackRecordsMap = {};
+  Map<String, dynamic> _fallbackStats = {
     'totalPlayed': 0,
     'wins': 0,
     'losses': 0,
     'winRate': 0.0,
     'averageAttempts': 0.0,
   };
-  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _apiService = widget.apiService ?? FootballApiService();
     _storageService = widget.storageService ?? StorageService();
-    _loadAllData();
+    _footballDataFuture = _fetchFootballData();
+    _loadFallbackStorage();
   }
 
-  Future<void> _loadAllData() async {
-    setState(() => _isLoading = true);
+  Future<FootballData> _fetchFootballData() async {
+    final players = await _apiService.getPlayers();
+    final teams = await _apiService.getTeams();
+    return FootballData(players: players, teams: teams);
+  }
+
+  Future<void> _loadFallbackStorage() async {
     try {
-      final players = await _apiService.getPlayers();
-      final teams = await _apiService.getTeams();
       final history = await _storageService.getAllHistory();
       final stats = await _storageService.getStatistics();
-
-      final recordsMap = <String, ChallengeRecord>{};
-      for (final rec in history) {
-        recordsMap[rec.challengeId] = rec;
-      }
-
       if (mounted) {
         setState(() {
-          _players = players;
-          _teams = teams;
-          _recordsMap = recordsMap;
-          _stats = stats;
-          _isLoading = false;
+          _fallbackRecordsMap = {for (final r in history) r.challengeId: r};
+          _fallbackStats = stats;
         });
       }
     } catch (e) {
-      debugPrint('[HomeScreen] Error loading data: $e');
-      if (mounted) setState(() => _isLoading = false);
+      debugPrint('[HomeScreen] Error loading fallback storage: $e');
+    }
+  }
+
+  void _loadAllData() {
+    setState(() {
+      _footballDataFuture = _fetchFootballData();
+    });
+    _loadFallbackStorage();
+    _getGameProvider()?.loadInitialState();
+  }
+
+  GameProvider? _getGameProvider() {
+    try {
+      return Provider.of<GameProvider>(context, listen: false);
+    } catch (_) {
+      return null;
     }
   }
 
@@ -108,15 +130,30 @@ class _HomeScreenState extends State<HomeScreen> {
               foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Reiniciar Todo'),
+            child: const Text('Sí, Reiniciar'),
           ),
         ],
       ),
     );
 
     if (confirmed == true) {
-      await _storageService.clearAll();
-      await _loadAllData();
+      final provider = _getGameProvider();
+      if (provider != null) {
+        await provider.resetAllProgress();
+      } else {
+        await _storageService.clearAll();
+        setState(() {
+          _fallbackRecordsMap.clear();
+          _fallbackStats = {
+            'totalPlayed': 0,
+            'wins': 0,
+            'losses': 0,
+            'winRate': 0.0,
+            'averageAttempts': 0.0,
+          };
+        });
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -145,6 +182,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    GameProvider? provider;
+    try {
+      provider = context.watch<GameProvider>();
+    } catch (_) {
+      provider = null;
+    }
+
+    final currentStats = provider?.statistics ?? _fallbackStats;
+    final currentRecords = provider?.recordsMap ?? _fallbackRecordsMap;
+
     return DefaultTabController(
       length: 2,
       child: Scaffold(
@@ -202,51 +249,94 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
-        body: _isLoading
-            ? const Center(
+        body: FutureBuilder<FootballData>(
+          future: _footballDataFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     CircularProgressIndicator(color: Color(0xFF00E676)),
                     SizedBox(height: 16),
-                    Text('Cargando Hub de Desafíos...',
+                    Text('Cargando Hub de Desafíos desde la API...',
                         style: TextStyle(color: Colors.white70)),
                   ],
                 ),
-              )
-            : Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 960),
+              );
+            }
+
+            if (snapshot.hasError) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
                   child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Stats Header Banner
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                        child: _buildStatsBanner(),
+                      const Icon(Icons.error_outline,
+                          size: 48, color: Color(0xFFFF5252)),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Error al consultar la API: ${snapshot.error}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white70),
                       ),
-                      // Tab Views
-                      Expanded(
-                        child: TabBarView(
-                          children: [
-                            _buildPlayersList(),
-                            _buildTeamsList(),
-                          ],
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00E676),
+                          foregroundColor: Colors.black,
                         ),
+                        onPressed: _loadAllData,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Reintentar'),
                       ),
                     ],
                   ),
                 ),
+              );
+            }
+
+            final data =
+                snapshot.data ?? const FootballData(players: [], teams: []);
+            _players = data.players;
+            _teams = data.teams;
+
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 960),
+                child: Column(
+                  children: [
+                    // Stats Header Banner
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      child: _buildStatsBanner(currentStats),
+                    ),
+                    // Tab Views
+                    Expanded(
+                      child: TabBarView(
+                        children: [
+                          _buildPlayersList(currentRecords),
+                          _buildTeamsList(currentRecords),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
+            );
+          },
+        ),
       ),
     );
   }
 
-  Widget _buildStatsBanner() {
-    final totalPlayed = _stats['totalPlayed'] ?? 0;
-    final wins = _stats['wins'] ?? 0;
-    final winRate = (_stats['winRate'] as num?)?.toStringAsFixed(0) ?? '0';
+  Widget _buildStatsBanner(Map<String, dynamic> stats) {
+    final totalPlayed = stats['totalPlayed'] ?? 0;
+    final wins = stats['wins'] ?? 0;
+    final winRate = (stats['winRate'] as num?)?.toStringAsFixed(0) ?? '0';
     final avgAttempts =
-        (_stats['averageAttempts'] as num?)?.toStringAsFixed(1) ?? '0.0';
+        (stats['averageAttempts'] as num?)?.toStringAsFixed(1) ?? '0.0';
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -348,13 +438,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildPlayersList() {
+  Widget _buildPlayersList(Map<String, ChallengeRecord> recordsMap) {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: _players.length,
       itemBuilder: (context, index) {
         final player = _players[index];
-        final record = _recordsMap[player.id];
+        final record = recordsMap[player.id];
         final isCompleted = record != null;
 
         return Card(
@@ -368,46 +458,53 @@ class _HomeScreenState extends State<HomeScreen> {
                   builder: (_) => GuessPlayerScreen(
                     player: player,
                     allPlayers: _players,
+                    storageService: _storageService,
                   ),
                 ),
               );
-              await _loadAllData();
+              _loadAllData();
             },
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  // Avatar / Lock status
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isCompleted
-                          ? (record.won
-                              ? const Color(0xFF00E676).withAlpha(30)
-                              : const Color(0xFFFF5252).withAlpha(30))
-                          : const Color(0xFF1E3A2F),
-                      border: Border.all(
-                        color: isCompleted
-                            ? (record.won
-                                ? const Color(0xFF00E676)
-                                : const Color(0xFFFF5252))
-                            : const Color(0xFF00E676).withAlpha(100),
-                        width: 1.5,
+                  // Hero Avatar / Lock status
+                  Hero(
+                    tag: 'player_hero_${player.id}',
+                    child: Material(
+                      color: Colors.transparent,
+                      child: Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isCompleted
+                              ? (record.won
+                                  ? const Color(0xFF00E676).withAlpha(30)
+                                  : const Color(0xFFFF5252).withAlpha(30))
+                              : const Color(0xFF1E3A2F),
+                          border: Border.all(
+                            color: isCompleted
+                                ? (record.won
+                                    ? const Color(0xFF00E676)
+                                    : const Color(0xFFFF5252))
+                                : const Color(0xFF00E676).withAlpha(100),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: isCompleted
+                            ? ClipOval(
+                                child: PlayerPhoto(player: player),
+                              )
+                            : const Center(
+                                child: Icon(
+                                  Icons.question_mark_rounded,
+                                  color: Color(0xFF00E676),
+                                  size: 24,
+                                ),
+                              ),
                       ),
                     ),
-                    child: isCompleted
-                        ? ClipOval(
-                            child: PlayerPhoto(player: player),
-                          )
-                        : const Center(
-                            child: Icon(
-                              Icons.question_mark_rounded,
-                              color: Color(0xFF00E676),
-                              size: 24,
-                            ),
-                          ),
                   ),
                   const SizedBox(width: 16),
                   // Challenge Details
@@ -430,25 +527,19 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(height: 4),
                         Text(
                           isCompleted
-                              ? '${player.nationality} • ${player.position} • Actual: ${player.currentTeam}'
-                              : 'Descubre al jugador mediante pistas de trayectoria y atributos',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isCompleted
-                                ? Colors.white70
-                                : Colors.white54,
+                              ? '${player.position} • ${player.currentTeam}'
+                              : 'Adivina al futbolista según pistas progresivas',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.white70,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  // Trailing status badge
-                  _buildStatusChip(
-                    isCompleted: isCompleted,
-                    won: record?.won ?? false,
-                    attempts: record?.attemptsUsed ?? 0,
-                  ),
+                  const SizedBox(width: 8),
+                  // Status Badge
+                  _buildStatusBadge(record),
                 ],
               ),
             ),
@@ -458,13 +549,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildTeamsList() {
+  Widget _buildTeamsList(Map<String, ChallengeRecord> recordsMap) {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: _teams.length,
       itemBuilder: (context, index) {
         final team = _teams[index];
-        final record = _recordsMap[team.id];
+        final record = recordsMap[team.id];
         final isCompleted = record != null;
 
         return Card(
@@ -478,48 +569,56 @@ class _HomeScreenState extends State<HomeScreen> {
                   builder: (_) => GuessTeamScreen(
                     team: team,
                     allTeams: _teams,
+                    storageService: _storageService,
                   ),
                 ),
               );
-              await _loadAllData();
+              _loadAllData();
             },
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  // Team Crest / Locked Crest
-                  Container(
-                    width: 52,
-                    height: 52,
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isCompleted
-                          ? (record.won
-                              ? const Color(0xFFFFD54F).withAlpha(30)
-                              : const Color(0xFFFF5252).withAlpha(30))
-                          : const Color(0xFF272517),
-                      border: Border.all(
-                        color: isCompleted
-                            ? (record.won
-                                ? const Color(0xFFFFD54F)
-                                : const Color(0xFFFF5252))
-                            : const Color(0xFFFFD54F).withAlpha(100),
-                        width: 1.5,
+                  // Hero Team Crest / Locked Crest
+                  Hero(
+                    tag: 'team_hero_${team.id}',
+                    child: Material(
+                      color: Colors.transparent,
+                      child: Container(
+                        width: 52,
+                        height: 52,
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isCompleted
+                              ? (record.won
+                                  ? const Color(0xFFFFD54F).withAlpha(30)
+                                  : const Color(0xFFFF5252).withAlpha(30))
+                              : const Color(0xFF272517),
+                          border: Border.all(
+                            color: isCompleted
+                                ? (record.won
+                                    ? const Color(0xFFFFD54F)
+                                    : const Color(0xFFFF5252))
+                                : const Color(0xFFFFD54F).withAlpha(100),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: isCompleted
+                            ? Padding(
+                                padding: const EdgeInsets.all(4),
+                                child:
+                                    TeamBadge(team: team, fit: BoxFit.contain),
+                              )
+                            : const Center(
+                                child: Icon(
+                                  Icons.shield_outlined,
+                                  color: Color(0xFFFFD54F),
+                                  size: 24,
+                                ),
+                              ),
                       ),
                     ),
-                    child: isCompleted
-                        ? Padding(
-                            padding: const EdgeInsets.all(4),
-                            child: TeamBadge(team: team, fit: BoxFit.contain),
-                          )
-                        : const Center(
-                            child: Icon(
-                              Icons.shield_outlined,
-                              color: Color(0xFFFFD54F),
-                              size: 24,
-                            ),
-                          ),
                   ),
                   const SizedBox(width: 16),
                   // Challenge Details
@@ -530,7 +629,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         Text(
                           isCompleted
                               ? team.name
-                              : 'Desafío Club #${index + 1}',
+                              : 'Desafío Escudo #${index + 1}',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -543,24 +642,18 @@ class _HomeScreenState extends State<HomeScreen> {
                         Text(
                           isCompleted
                               ? '${team.country} • ${team.league}'
-                              : 'Identifica el club a partir de su escudo pixelado/recortado',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isCompleted
-                                ? Colors.white70
-                                : Colors.white54,
+                              : 'Reconoce el club ampliando progresivamente su escudo',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.white70,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  // Status chip
-                  _buildStatusChip(
-                    isCompleted: isCompleted,
-                    won: record?.won ?? false,
-                    attempts: record?.attemptsUsed ?? 0,
-                  ),
+                  const SizedBox(width: 8),
+                  // Status Badge
+                  _buildStatusBadge(record),
                 ],
               ),
             ),
@@ -570,33 +663,35 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildStatusChip({
-    required bool isCompleted,
-    required bool won,
-    required int attempts,
-  }) {
-    if (!isCompleted) {
+  Widget _buildStatusBadge(ChallengeRecord? record) {
+    if (record == null) {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E2D3A),
+          color: const Color(0xFF14212D),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFF2C4356)),
+          border: Border.all(color: const Color(0xFF223545)),
         ),
         child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Jugar',
-                style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600)),
+            Icon(Icons.lock_outline, size: 14, color: Colors.white60),
             SizedBox(width: 4),
-            Icon(Icons.arrow_forward, size: 14, color: Colors.white70),
+            Text(
+              'Pendiente',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ],
         ),
       );
     }
+
+    final won = record.won;
+    final attempts = record.attemptsUsed;
 
     if (won) {
       return Container(
@@ -663,9 +758,7 @@ class _ApiInspectorSheet extends StatefulWidget {
 class _ApiInspectorSheetState extends State<_ApiInspectorSheet> {
   final TextEditingController _queryController = TextEditingController();
   late final TextEditingController _apiKeyController;
-  bool _isSearching = false;
-  Map<String, dynamic>? _lastResult;
-  String? _errorMessage;
+  Future<Map<String, dynamic>?>? _searchFuture;
   String _targetType = 'team'; // 'team' or 'player'
 
   @override
@@ -675,48 +768,19 @@ class _ApiInspectorSheetState extends State<_ApiInspectorSheet> {
         TextEditingController(text: widget.apiService.apiKey);
   }
 
-  Future<void> _executeSearch(String query) async {
+  void _executeSearch(String query) {
     final text = query.trim();
     if (text.isEmpty) return;
 
-    // Sync any user-modified API key
     if (_apiKeyController.text.trim().isNotEmpty) {
       widget.apiService.apiKey = _apiKeyController.text.trim();
     }
 
     setState(() {
-      _isSearching = true;
-      _lastResult = null;
-      _errorMessage = null;
+      _searchFuture = _targetType == 'team'
+          ? widget.apiService.fetchLiveTeamInfo(text)
+          : widget.apiService.fetchLivePlayerInfo(text);
     });
-
-    try {
-      if (_targetType == 'team') {
-        final res = await widget.apiService.fetchLiveTeamInfo(text);
-        if (mounted) {
-          setState(() {
-            _lastResult = res;
-            if (res == null) {
-              _errorMessage = 'No se encontraron resultados para "$text".';
-            }
-          });
-        }
-      } else {
-        final res = await widget.apiService.fetchLivePlayerInfo(text);
-        if (mounted) {
-          setState(() {
-            _lastResult = res;
-            if (res == null) {
-              _errorMessage = 'No se encontraron resultados para "$text".';
-            }
-          });
-        }
-      }
-    } catch (e) {
-      if (mounted) setState(() => _errorMessage = 'Excepción: $e');
-    } finally {
-      if (mounted) setState(() => _isSearching = false);
-    }
   }
 
   @override
@@ -763,7 +827,7 @@ class _ApiInspectorSheetState extends State<_ApiInspectorSheet> {
               ),
               const SizedBox(height: 6),
               const Text(
-                'Consulta TheSportsDB REST API con capa de fallback y enriquecimiento CORS seguro:',
+                'Consulta TheSportsDB REST API con FutureBuilder y capa de enriquecimiento segura:',
                 style: TextStyle(color: Colors.white70, fontSize: 13),
               ),
               const SizedBox(height: 16),
@@ -871,20 +935,9 @@ class _ApiInspectorSheetState extends State<_ApiInspectorSheet> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 16),
                     ),
-                    onPressed: _isSearching
-                        ? null
-                        : () => _executeSearch(_queryController.text),
-                    child: _isSearching
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.black,
-                            ),
-                          )
-                        : const Text('Consultar',
-                            style: TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: () => _executeSearch(_queryController.text),
+                    child: const Text('Consultar',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -911,92 +964,133 @@ class _ApiInspectorSheetState extends State<_ApiInspectorSheet> {
               ),
               const SizedBox(height: 16),
 
-              // Results box
-              if (_errorMessage != null)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2E1719),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFFF5252)),
-                  ),
-                  child: Text(
-                    _errorMessage!,
-                    style: const TextStyle(color: Color(0xFFFF8A80)),
-                  ),
-                ),
+              // Live FutureBuilder for REST API search
+              if (_searchFuture != null)
+                FutureBuilder<Map<String, dynamic>?>(
+                  future: _searchFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(24),
+                        alignment: Alignment.center,
+                        child: const Column(
+                          children: [
+                            CircularProgressIndicator(
+                                color: Color(0xFF00E676)),
+                            SizedBox(height: 12),
+                            Text(
+                              'Consultando TheSportsDB REST API...',
+                              style: TextStyle(
+                                  color: Colors.white70, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
 
-              if (_lastResult != null) ...[
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF070E14),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF00E676)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                    if (snapshot.hasError) {
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2E1719),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFFF5252)),
+                        ),
+                        child: Text(
+                          'Error en la consulta: ${snapshot.error}',
+                          style: const TextStyle(color: Color(0xFFFF8A80)),
+                        ),
+                      );
+                    }
+
+                    final result = snapshot.data;
+                    if (result == null) {
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1F2833),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFFFD54F)),
+                        ),
+                        child: Text(
+                          'No se encontraron resultados para "${_queryController.text.trim()}".',
+                          style: const TextStyle(color: Color(0xFFFFD54F)),
+                        ),
+                      );
+                    }
+
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF070E14),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF00E676)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.check_circle,
-                              size: 16, color: Color(0xFF00E676)),
-                          const SizedBox(width: 6),
+                          Row(
+                            children: [
+                              const Icon(Icons.check_circle,
+                                  size: 16, color: Color(0xFF00E676)),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Origen: ${result["source"] ?? "TheSportsDB REST API"}',
+                                style: const TextStyle(
+                                  color: Color(0xFF00E676),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if ((result['strBadge'] ??
+                                  result['strThumb'] ??
+                                  result['strLogo']) !=
+                              null) ...[
+                            const SizedBox(height: 10),
+                            Center(
+                              child: Container(
+                                height: 90,
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF14212D),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                      color: const Color(0xFF223545)),
+                                ),
+                                child: Image.network(
+                                  (result['strBadge'] ??
+                                          result['strThumb'] ??
+                                          result['strLogo'])
+                                      .toString(),
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (_, _, _) => const Icon(
+                                    Icons.image_not_supported,
+                                    color: Colors.white38,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 8),
                           Text(
-                            'Origen: ${_lastResult!["source"] ?? "TheSportsDB Free API"}',
+                            const JsonEncoder.withIndent('  ').convert(result),
                             style: const TextStyle(
-                              color: Color(0xFF00E676),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
+                              fontFamily: 'monospace',
+                              color: Color(0xFF81D4FA),
+                              fontSize: 11,
                             ),
                           ),
                         ],
                       ),
-                      if ((_lastResult!['strBadge'] ??
-                              _lastResult!['strThumb'] ??
-                              _lastResult!['strLogo']) !=
-                          null) ...[
-                        const SizedBox(height: 10),
-                        Center(
-                          child: Container(
-                            height: 90,
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF14212D),
-                              borderRadius: BorderRadius.circular(10),
-                              border:
-                                  Border.all(color: const Color(0xFF223545)),
-                            ),
-                            child: Image.network(
-                              (_lastResult!['strBadge'] ??
-                                      _lastResult!['strThumb'] ??
-                                      _lastResult!['strLogo'])
-                                  .toString(),
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, _, _) => const Icon(
-                                Icons.image_not_supported,
-                                color: Colors.white38,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 8),
-                      Text(
-                        const JsonEncoder.withIndent('  ')
-                            .convert(_lastResult),
-                        style: const TextStyle(
-                          fontFamily: 'monospace',
-                          color: Color(0xFF81D4FA),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
-              ],
             ],
           ),
         ),

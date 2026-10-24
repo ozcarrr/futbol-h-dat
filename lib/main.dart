@@ -1,17 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'providers/game_provider.dart';
 import 'screens/home_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => GameProvider()..loadInitialState(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final GameProvider? gameProvider;
+
+  const MyApp({super.key, this.gameProvider});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    final app = MaterialApp(
       title: 'FutboLE',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -46,5 +55,23 @@ class MyApp extends StatelessWidget {
       ),
       home: const HomeScreen(),
     );
+
+    if (_hasAncestorProvider(context)) {
+      return app;
+    }
+
+    return ChangeNotifierProvider(
+      create: (_) => gameProvider ?? (GameProvider()..loadInitialState()),
+      child: app,
+    );
+  }
+
+  bool _hasAncestorProvider(BuildContext context) {
+    try {
+      Provider.of<GameProvider>(context, listen: false);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 }

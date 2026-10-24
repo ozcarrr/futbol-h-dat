@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/team_model.dart';
+import '../providers/game_provider.dart';
 import '../services/storage_service.dart';
 import '../widgets/autocomplete_search.dart';
 import '../widgets/clue_tile.dart';
@@ -40,8 +42,18 @@ class _GuessTeamScreenState extends State<GuessTeamScreen> {
     _checkInitialState();
   }
 
+  GameProvider? _getGameProvider() {
+    try {
+      return Provider.of<GameProvider>(context, listen: false);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _checkInitialState() async {
-    final record = await _storageService.getChallengeResult(widget.team.id);
+    final provider = _getGameProvider();
+    final record = provider?.getRecord(widget.team.id) ??
+        await _storageService.getChallengeResult(widget.team.id);
     if (mounted) {
       setState(() {
         if (record != null) {
@@ -94,7 +106,15 @@ class _GuessTeamScreenState extends State<GuessTeamScreen> {
     });
 
     if (isCorrect || isMaxReached) {
-      if (!_isPracticeMode) {
+      final provider = _getGameProvider();
+      if (provider != null) {
+        await provider.recordChallengeAttempt(
+          challengeId: widget.team.id,
+          type: 'team',
+          won: isCorrect,
+          attemptsUsed: newAttempts,
+        );
+      } else if (!_isPracticeMode) {
         await _storageService.saveChallengeResult(
           challengeId: widget.team.id,
           type: 'team',
@@ -119,13 +139,23 @@ class _GuessTeamScreenState extends State<GuessTeamScreen> {
       }
     });
 
-    if (isMaxReached && !_isPracticeMode) {
-      await _storageService.saveChallengeResult(
-        challengeId: widget.team.id,
-        type: 'team',
-        won: false,
-        attemptsUsed: newAttempts,
-      );
+    if (isMaxReached) {
+      final provider = _getGameProvider();
+      if (provider != null) {
+        await provider.recordChallengeAttempt(
+          challengeId: widget.team.id,
+          type: 'team',
+          won: false,
+          attemptsUsed: newAttempts,
+        );
+      } else if (!_isPracticeMode) {
+        await _storageService.saveChallengeResult(
+          challengeId: widget.team.id,
+          type: 'team',
+          won: false,
+          attemptsUsed: newAttempts,
+        );
+      }
     }
   }
 
@@ -207,41 +237,47 @@ class _GuessTeamScreenState extends State<GuessTeamScreen> {
                       Center(
                         child: Column(
                           children: [
-                            Container(
-                              width: 220,
-                              height: 220,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF0F1A24),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: _isGameOver
-                                      ? (_isWon
-                                          ? const Color(0xFF00E676)
-                                          : const Color(0xFFFF5252))
-                                      : const Color(0xFFFFD54F).withAlpha(140),
-                                  width: 2,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withAlpha(120),
-                                    blurRadius: 18,
-                                    offset: const Offset(0, 6),
+                            Hero(
+                              tag: 'team_hero_${widget.team.id}',
+                              child: Material(
+                                color: Colors.transparent,
+                                child: Container(
+                                  width: 220,
+                                  height: 220,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0F1A24),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: _isGameOver
+                                          ? (_isWon
+                                              ? const Color(0xFF00E676)
+                                              : const Color(0xFFFF5252))
+                                          : const Color(0xFFFFD54F).withAlpha(140),
+                                      width: 2,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withAlpha(120),
+                                        blurRadius: 18,
+                                        offset: const Offset(0, 6),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(18),
-                                child: Center(
-                                  child: AnimatedScale(
-                                    scale: currentZoomScale,
-                                    duration:
-                                        const Duration(milliseconds: 450),
-                                    curve: Curves.easeOutCubic,
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(12),
-                                      child: TeamBadge(
-                                        team: widget.team,
-                                        fit: BoxFit.contain,
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(18),
+                                    child: Center(
+                                      child: AnimatedScale(
+                                        scale: currentZoomScale,
+                                        duration:
+                                            const Duration(milliseconds: 450),
+                                        curve: Curves.easeOutCubic,
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(12),
+                                          child: TeamBadge(
+                                            team: widget.team,
+                                            fit: BoxFit.contain,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
